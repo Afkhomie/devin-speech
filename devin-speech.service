@@ -1,0 +1,14 @@
+[Unit]
+Description=devin-speech voice daemon
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/devin-speech
+Restart=on-failure
+RestartSec=3
+Environment=PATH=%h/.local/bin:%h/go/bin:/usr/local/bin:/usr/bin
+
+[Install]
+WantedBy=graphical-session.target
