@@ -11,6 +11,7 @@ import (
 	"github.com/Afkhomie/devin-speech/internal/config"
 	"github.com/Afkhomie/devin-speech/internal/keys"
 	"github.com/Afkhomie/devin-speech/internal/orchestrator"
+	"github.com/Afkhomie/devin-speech/internal/tray"
 )
 
 func main() {
@@ -39,6 +40,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	if cfg.Tray.Enabled {
+		go tray.Run(ctx, orch.StateCh())
+	}
 	log.Printf("devin-speech started (project=%s)", cfg.ProjectDir)
 	if err := orch.Run(ctx, *debugKeys); err != nil {
 		log.Fatalf("run: %v", err)
