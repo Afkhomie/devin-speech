@@ -1,0 +1,23 @@
+# devin-speech configuration
+# copy to ~/.config/devin-speech/config.toml
+
+whisper_url = "http://127.0.0.1:8080"
+project_dir = ""            # empty = current working directory
+permission_mode = "bypass"  # bypass | smart | accept-edits | ask | plan
+
+[keys]
+capslock = "KEY_CAPSLOCK"   # dictation: hold / double-tap lock / tap stop
+spacebar = "KEY_SPACE"      # voice mode: double-tap toggles
+
+[stt]
+model_path = "~/tools/models/ggml-base.en-q5_1.bin"
+server_bin = "~/tools/whisper.cpp/build/bin/whisper-server"
+accent_prompt = "The speaker has a Nepali-English accent."
+
+[tts]
+bin = "~/tools/piper/piper"
+voice = "~/tools/voices/en_US-lessac-medium.onnx"
+player = "paplay"           # paplay | pw-play | aplay
+
+[tray]
+enabled = true
