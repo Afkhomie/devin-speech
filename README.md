@@ -1,40 +1,25 @@
 # devin-speech
 
-Local, zero-cost voice interface for [Devin CLI](https://devin.ai). Two modes, one daemon:
+Local, zero-cost voice interface for [Devin CLI](https://devin.ai). Two modes, one daemon, plus automated switching between the terminal UI and voice.
 
-1. **Dictation** - hold or double-tap a configurable key (default: CapsLock), speak, and the transcription is typed into whatever window is focused and submitted. Works in the Devin TUI, browsers, anywhere.
-2. **Voice mode** - tap the key once for a hands-free conversation with your current Devin session. Speech is transcribed, sent to the session over ACP, and Devin's text replies are spoken back through TTS.
+1. **Dictation** - hold CapsLock to dictate (release to send), or double-tap CapsLock for hands-free locked dictation (tap once to send). Text is typed into whatever window is focused.
+2. **Voice mode** - double-tap Spacebar toggles a hands-free conversation with your Devin session. If a Devin TUI is open, it is exited automatically and relaunched on voice exit, so voice continues the exact same session with full memory. Typing any key also exits voice mode.
 
-Everything runs locally. No paid APIs, no cloud STT/TTS.
+Everything runs locally: whisper.cpp for STT, piper for TTS, `devin acp` (Agent Client Protocol) as the agent bridge. No paid APIs, no cloud.
 
 ## status
 
-Early development. Design approved, spikes in progress.
+v1 implemented: key state machine (evdev), VAD endpointing, whisper STT, piper TTS, ACP client with permission auto-approve, session discovery + TUI/voice switcher, system tray indicator, systemd user service. X11 only.
 
-## planned architecture
+## requirements
 
-| piece | choice |
-|---|---|
-| daemon | single Go binary |
-| key capture | evdev (hold / tap / double-tap state machine, typing auto-exits voice mode) |
-| STT | whisper.cpp `whisper-server`, CPU-only |
-| TTS | piper -> default audio sink |
-| Devin bridge | `devin acp` over stdio JSON-RPC (Agent Client Protocol), `session/load` to attach to an existing session |
-| text injection | xdotool (X11) |
-| indicator | system tray icon with listening / thinking / speaking states |
-| audio input | any standard audio source (e.g. phone-as-mic tools) via the default PulseAudio/PipeWire source |
-| lifecycle | systemd user service, lazy-started heavy components |
+- Linux X11, Devin CLI authenticated, user in `input` group
+- whisper.cpp `whisper-server` binary + ggml model
+- piper binary + voice model
+- xdotool, pw-record/parec, paplay/pw-play
+- Go 1.24+
 
-## session model
-
-Voice mode attaches to the most recent Devin session in the working directory (same semantics as `devin -c`), so voice continues the same conversation with full memory. Cross-project requests work through normal filesystem access.
-
-## requirements (planned)
-
-- Linux, X11 (Wayland not targeted yet)
-- Devin CLI installed and authenticated
-- whisper.cpp, piper binaries
-- user in `input` group for evdev key capture
+See `docs/install.md` for setup and `docs/implementation-plan.md` for the design plan.
 
 ## license
 
