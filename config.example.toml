@@ -10,7 +10,7 @@ capslock = "KEY_CAPSLOCK"   # dictation: hold / double-tap lock / tap stop
 spacebar = "KEY_SPACE"      # voice mode: double-tap toggles
 
 [stt]
-model_path = "~/tools/models/ggml-base.en-q5_1.bin"
+model_path = "~/tools/models/ggml-tiny.en-q8_0.bin"
 server_bin = "~/tools/whisper.cpp/build/bin/whisper-server"
 accent_prompt = "The speaker has a Nepali-English accent."
 

@@ -50,7 +50,7 @@ func Default() *Config {
 			Spacebar: "KEY_SPACE",
 		},
 		STT: STT{
-			ModelPath:    filepath.Join(home, "tools/models/ggml-base.en-q5_1.bin"),
+			ModelPath:    filepath.Join(home, "tools/models/ggml-tiny.en-q8_0.bin"),
 			ServerBin:    filepath.Join(home, "tools/whisper.cpp/build/bin/whisper-server"),
 			AccentPrompt: "The speaker has a Nepali-English accent.",
 		},
