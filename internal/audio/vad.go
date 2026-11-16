@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -15,30 +16,38 @@ import (
 // Endpointing: speech = RMS above threshold for >= speechMs; endpoint after
 // silenceMs of quiet following speech. maxDur caps an utterance.
 type Vad struct {
-	Threshold  float64 // RMS speech threshold (0-32768 scale)
-	SpeechMs   int
-	SilenceMs  int
-	MaxDurMs   int
-	preRollMs  int
+	Threshold float64 // RMS speech threshold (0-32768 scale)
+	SpeechMs  int
+	SilenceMs int
+	MaxDurMs  int
+	preRollMs int
 }
 
 func DefaultVad() *Vad {
 	return &Vad{Threshold: 800, SpeechMs: 250, SilenceMs: 900, MaxDurMs: 30000, preRollMs: 300}
 }
 
-// Listen streams the default source and sends wav paths on out.
-// Blocks until ctx done. Requires parec (pulse) or pw-record fallback is
-// handled by caller choosing recorder; v1 uses parec raw.
-func (v *Vad) Listen(ctx context.Context, out chan<- string) error {
-	bin := "parec"
-	args := []string{"--format=s16le", "--rate=16000", "--channels=1"}
-	cmd := exec.CommandContext(ctx, bin, args...)
+// Listen streams the audio source and sends wav paths on out.
+// source "" = system default via parec; "..." containing ':' = direct ALSA
+// via arecord raw PCM. Blocks until ctx done.
+func (v *Vad) Listen(ctx context.Context, source string, out chan<- string) error {
+	var cmd *exec.Cmd
+	if strings.Contains(source, ":") {
+		cmd = exec.CommandContext(ctx, "arecord",
+			"-D", source, "-f", "S16_LE", "-r", "16000", "-c", "1")
+	} else {
+		args := []string{"--format=s16le", "--rate=16000", "--channels=1"}
+		if source != "" {
+			args = append([]string{"--device=" + source}, args...)
+		}
+		cmd = exec.CommandContext(ctx, "parec", args...)
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("parec: %w", err)
+		return fmt.Errorf("recorder: %w", err)
 	}
 	defer cmd.Process.Kill()
 
@@ -165,12 +174,12 @@ func writeWav(pcm []byte) (string, error) {
 	binary.LittleEndian.PutUint32(hdr[4:], 36+dataLen)
 	copy(hdr[8:], "WAVEfmt ")
 	binary.LittleEndian.PutUint32(hdr[16:], 16)
-	binary.LittleEndian.PutUint16(hdr[20:], 1)      // PCM
-	binary.LittleEndian.PutUint16(hdr[22:], 1)      // mono
-	binary.LittleEndian.PutUint32(hdr[24:], 16000)  // rate
-	binary.LittleEndian.PutUint32(hdr[28:], 32000)  // byte rate
-	binary.LittleEndian.PutUint16(hdr[32:], 2)      // block align
-	binary.LittleEndian.PutUint16(hdr[34:], 16)     // bits
+	binary.LittleEndian.PutUint16(hdr[20:], 1)     // PCM
+	binary.LittleEndian.PutUint16(hdr[22:], 1)     // mono
+	binary.LittleEndian.PutUint32(hdr[24:], 16000) // rate
+	binary.LittleEndian.PutUint32(hdr[28:], 32000) // byte rate
+	binary.LittleEndian.PutUint16(hdr[32:], 2)     // block align
+	binary.LittleEndian.PutUint16(hdr[34:], 16)    // bits
 	copy(hdr[36:], "data")
 	binary.LittleEndian.PutUint32(hdr[40:], dataLen)
 	if _, err := f.Write(hdr); err != nil {

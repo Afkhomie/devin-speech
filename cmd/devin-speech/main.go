@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/Afkhomie/devin-speech/internal/config"
@@ -19,6 +20,10 @@ func main() {
 	debugKeys := flag.Bool("debug-keys", false, "log raw key events")
 	flag.Parse()
 
+	if *configPath == "" {
+		home, _ := os.UserHomeDir()
+		*configPath = filepath.Join(home, ".config", "devin-speech", "config.toml")
+	}
 	cfg, err := config.Load(*configPath)
 	if err != nil {
 		log.Fatalf("config: %v", err)
@@ -34,6 +39,7 @@ func main() {
 		PiperPlayer:    cfg.TTS.Player,
 		ProjectDir:     cfg.ProjectDir,
 		PermissionMode: cfg.PermissionMode,
+		AudioSource:    cfg.Audio.Source,
 		Keys:           keys.MachineConfig{},
 	})
 
@@ -43,7 +49,7 @@ func main() {
 	if cfg.Tray.Enabled {
 		go tray.Run(ctx, orch.StateCh())
 	}
-	log.Printf("devin-speech started (project=%s)", cfg.ProjectDir)
+	log.Printf("devin-speech started (project=%s source=%q)", cfg.ProjectDir, cfg.Audio.Source)
 	if err := orch.Run(ctx, *debugKeys); err != nil {
 		log.Fatalf("run: %v", err)
 	}

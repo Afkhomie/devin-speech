@@ -26,6 +26,7 @@ type Deps struct {
 	PiperPlayer    string
 	ProjectDir     string
 	PermissionMode string
+	AudioSource    string
 	Keys           keys.MachineConfig
 }
 
@@ -41,9 +42,9 @@ const (
 )
 
 type Orchestrator struct {
-	d      Deps
+	d       Deps
 	machine *keys.Machine
-	sw     *switcher.Switcher
+	sw      *switcher.Switcher
 	speaker tts.Speaker
 	stateCh chan State
 	mu      sync.Mutex
@@ -60,12 +61,12 @@ type Orchestrator struct {
 
 func New(d Deps) *Orchestrator {
 	return &Orchestrator{
-		d:        d,
-		machine:  keys.NewMachine(d.Keys),
-		sw:       switcher.New(d.ProjectDir, d.PermissionMode),
-		speaker:  tts.NewPiperSpeaker(d.PiperBin, d.PiperVoice, d.PiperPlayer),
-		stateCh:  make(chan State, 8),
-		recDone:  make(chan string, 1),
+		d:       d,
+		machine: keys.NewMachine(d.Keys),
+		sw:      switcher.New(d.ProjectDir, d.PermissionMode),
+		speaker: tts.NewPiperSpeaker(d.PiperBin, d.PiperVoice, d.PiperPlayer),
+		stateCh: make(chan State, 8),
+		recDone: make(chan string, 1),
 	}
 }
 
@@ -91,7 +92,7 @@ func (o *Orchestrator) Run(ctx context.Context, debugKeys bool) error {
 	vadOut := make(chan string, 4)
 	go func() {
 		v := audio.DefaultVad()
-		if err := v.Listen(vadCtx, vadOut); err != nil && ctx.Err() == nil {
+		if err := v.Listen(vadCtx, o.d.AudioSource, vadOut); err != nil && ctx.Err() == nil {
 			log.Printf("vad: %v", err)
 		}
 	}()
@@ -157,7 +158,7 @@ func (o *Orchestrator) startRecording() {
 	o.recCancel = cancel
 	o.setState(StateDictating)
 	go func() {
-		path, err := audio.RecordWav(ctx, "", 0)
+		path, err := audio.RecordWav(ctx, o.d.AudioSource, 0)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("record: %v", err)
 		}
@@ -174,7 +175,7 @@ func (o *Orchestrator) startLockedRecording() {
 	o.recCancel = cancel
 	o.setState(StateDictationLocked)
 	go func() {
-		path, err := audio.RecordWav(ctx, "", 10*time.Minute)
+		path, err := audio.RecordWav(ctx, o.d.AudioSource, 10*time.Minute)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("record locked: %v", err)
 		}

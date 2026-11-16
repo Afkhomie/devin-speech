@@ -21,3 +21,9 @@ player = "paplay"           # paplay | pw-play | aplay
 
 [tray]
 enabled = true
+
+[audio]
+# "" = system default source. "plughw:..." = direct ALSA device, bypasses
+# PipeWire/Pulse (use for snd-aloop / Wo Mic style virtual mics that
+# PipeWire mis-binds).
+source = ""

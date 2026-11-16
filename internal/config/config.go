@@ -14,19 +14,23 @@ type Keys struct {
 }
 
 type STT struct {
-	ModelPath string `toml:"model_path"`
-	ServerBin string `toml:"server_bin"`
+	ModelPath    string `toml:"model_path"`
+	ServerBin    string `toml:"server_bin"`
 	AccentPrompt string `toml:"accent_prompt"`
 }
 
 type TTS struct {
-	Bin   string `toml:"bin"`
-	Voice string `toml:"voice"`
+	Bin    string `toml:"bin"`
+	Voice  string `toml:"voice"`
 	Player string `toml:"player"`
 }
 
 type Tray struct {
 	Enabled bool `toml:"enabled"`
+}
+
+type Audio struct {
+	Source string `toml:"source"` // "" = system default; "plughw:..." = direct ALSA
 }
 
 type Config struct {
@@ -36,6 +40,7 @@ type Config struct {
 	Keys           Keys   `toml:"keys"`
 	STT            STT    `toml:"stt"`
 	TTS            TTS    `toml:"tts"`
+	Audio          Audio  `toml:"audio"`
 	Tray           Tray   `toml:"tray"`
 }
 
