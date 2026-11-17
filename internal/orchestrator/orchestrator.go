@@ -57,6 +57,8 @@ type Orchestrator struct {
 	voiceSID    string
 	voiceActive bool
 	voiceCancel context.CancelFunc
+	vadCancel   context.CancelFunc
+	vadOut      chan string
 }
 
 func New(d Deps) *Orchestrator {
@@ -67,6 +69,7 @@ func New(d Deps) *Orchestrator {
 		speaker: tts.NewPiperSpeaker(d.PiperBin, d.PiperVoice, d.PiperPlayer),
 		stateCh: make(chan State, 8),
 		recDone: make(chan string, 1),
+		vadOut:  make(chan string, 4),
 	}
 }
 
@@ -86,16 +89,8 @@ func (o *Orchestrator) Run(ctx context.Context, debugKeys bool) error {
 	events := make(chan keys.Event, 64)
 	go keys.Listen(ctx, o.machine, events, debugKeys)
 
-	// VAD for voice mode: lazily started when voice activates
-	vadCtx, vadCancel := context.WithCancel(ctx)
-	defer vadCancel()
-	vadOut := make(chan string, 4)
-	go func() {
-		v := audio.DefaultVad()
-		if err := v.Listen(vadCtx, o.d.AudioSource, vadOut); err != nil && ctx.Err() == nil {
-			log.Printf("vad: %v", err)
-		}
-	}()
+	// VAD runs only while voice mode is active: it holds the ALSA capture
+	// subdevice paired with the mic source, which would starve dictation.
 
 	for {
 		select {
@@ -104,7 +99,7 @@ func (o *Orchestrator) Run(ctx context.Context, debugKeys bool) error {
 			return nil
 		case ev := <-events:
 			o.handleKey(ev)
-		case wav := <-vadOut:
+		case wav := <-o.vadOut:
 			if o.voiceActive {
 				go o.handleUtterance(ctx, wav)
 			}
@@ -141,14 +136,16 @@ func (o *Orchestrator) handleKey(ev keys.Event) {
 			o.stopRecordingAndSend()
 		}
 	case keys.EvVoiceToggle:
+		// async: EnterVoice/ExitVoice can block for seconds (TUI exit,
+		// lock waits, ACP handshake) and must not stall the key loop
 		if o.voiceActive {
-			o.exitVoice()
+			go o.exitVoice()
 		} else {
-			o.enterVoice()
+			go o.enterVoice()
 		}
 	case keys.EvTyping:
 		if o.voiceActive {
-			o.exitVoice()
+			go o.exitVoice()
 		}
 	}
 }
@@ -157,8 +154,10 @@ func (o *Orchestrator) startRecording() {
 	ctx, cancel := context.WithCancel(context.Background())
 	o.recCancel = cancel
 	o.setState(StateDictating)
+	log.Printf("recording start (source=%q)", o.d.AudioSource)
 	go func() {
 		path, err := audio.RecordWav(ctx, o.d.AudioSource, 0)
+		log.Printf("recording end path=%q err=%v", path, err)
 		if err != nil && ctx.Err() == nil {
 			log.Printf("record: %v", err)
 		}
@@ -190,6 +189,7 @@ func (o *Orchestrator) stopRecordingAndSend() {
 	if o.recCancel != nil {
 		o.recCancel()
 	}
+	log.Printf("dictation commit")
 	select {
 	case path := <-o.recDone:
 		go o.transcribeAndInject(path)
@@ -201,6 +201,12 @@ func (o *Orchestrator) stopRecordingAndSend() {
 func (o *Orchestrator) discardRecording() {
 	if o.recCancel != nil {
 		o.recCancel()
+	}
+	// drain the pending path so a discarded take can't be consumed by the
+	// next commit (recDone is buffered and would otherwise go stale)
+	select {
+	case <-o.recDone:
+	case <-time.After(500 * time.Millisecond):
 	}
 	o.setState(StateIdle)
 }
@@ -227,7 +233,8 @@ func (o *Orchestrator) transcribeAndInject(wav string) {
 }
 
 func (o *Orchestrator) enterVoice() {
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
 	id, err := o.sw.EnterVoice(ctx)
 	if err != nil {
 		log.Printf("voice enter: %v", err)
@@ -248,6 +255,14 @@ func (o *Orchestrator) enterVoice() {
 	o.voiceActive = true
 	o.setState(StateVoiceListening)
 	go o.drainUpdates()
+	vadCtx, vadCancel := context.WithCancel(context.Background())
+	o.vadCancel = vadCancel
+	go func() {
+		v := audio.DefaultVad()
+		if err := v.Listen(vadCtx, o.d.AudioSource, o.vadOut); err != nil && vadCtx.Err() == nil {
+			log.Printf("vad: %v", err)
+		}
+	}()
 	log.Printf("voice mode ON session=%s", id)
 }
 
@@ -314,6 +329,10 @@ func (o *Orchestrator) exitVoice() {
 	o.machine.SetVoiceActive(false)
 	if o.voiceCancel != nil {
 		o.voiceCancel()
+	}
+	if o.vadCancel != nil {
+		o.vadCancel()
+		o.vadCancel = nil
 	}
 	ctx := context.Background()
 	if err := o.sw.ExitVoice(ctx); err != nil {
