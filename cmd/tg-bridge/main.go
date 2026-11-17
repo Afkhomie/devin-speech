@@ -250,7 +250,7 @@ func (b *bot) poll(ctx context.Context) {
 		}
 		for _, upd := range res.Result {
 			b.state.Offset = upd.UpdateID + 1
-			b.handle(ctx, upd)
+			go b.handle(ctx, upd)
 		}
 		b.state.save(statePath)
 	}
@@ -299,6 +299,7 @@ func (b *bot) handle(ctx context.Context, upd tgMessage) {
 		return
 	}
 
+	log.Printf("tg: msg from %d: %s", uid, truncate(text, 60))
 	b.sendChatAction(ctx, chatID, "typing")
 	start := time.Now()
 	reply, err := b.devin.ask(ctx, text)
