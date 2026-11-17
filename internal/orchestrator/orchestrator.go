@@ -21,6 +21,10 @@ type Deps struct {
 	WhisperBin     string
 	WhisperModel   string
 	AccentPrompt   string
+	STTBackend     string // "auto", "local", "remote"
+	STTBaseURL     string
+	STTModel       string
+	STTAPIKey      string
 	PiperBin       string
 	PiperVoice     string
 	PiperPlayer    string
@@ -211,12 +215,34 @@ func (o *Orchestrator) discardRecording() {
 	o.setState(StateIdle)
 }
 
-func (o *Orchestrator) transcribeAndInject(wav string) {
-	if err := stt.EnsureServer(context.Background(), o.d.WhisperURL, o.d.WhisperBin, o.d.WhisperModel); err != nil {
-		log.Printf("whisper server: %v", err)
-		return
+// transcribe runs remote STT when configured (auto/local/remote) with
+// local whisper-server as fallback. Returns ("", err) on total failure.
+func (o *Orchestrator) transcribe(ctx context.Context, wav string) (string, error) {
+	local := func() (string, error) {
+		if err := stt.EnsureServer(ctx, o.d.WhisperURL, o.d.WhisperBin, o.d.WhisperModel); err != nil {
+			return "", err
+		}
+		return stt.Transcribe(ctx, o.d.WhisperURL, wav, o.d.AccentPrompt, "en")
 	}
-	text, err := stt.Transcribe(context.Background(), o.d.WhisperURL, wav, o.d.AccentPrompt, "en")
+	backend := o.d.STTBackend
+	if backend == "" {
+		backend = "auto"
+	}
+	if backend == "remote" || (backend == "auto" && o.d.STTAPIKey != "" && o.d.STTBaseURL != "") {
+		text, err := stt.TranscribeRemote(ctx, o.d.STTBaseURL, o.d.STTAPIKey, o.d.STTModel, wav)
+		if err == nil {
+			return text, nil
+		}
+		log.Printf("remote stt failed (%v), falling back to local", err)
+		if backend == "remote" {
+			return "", err
+		}
+	}
+	return local()
+}
+
+func (o *Orchestrator) transcribeAndInject(wav string) {
+	text, err := o.transcribe(context.Background(), wav)
 	if err != nil {
 		log.Printf("stt: %v", err)
 		return
@@ -299,11 +325,7 @@ func (o *Orchestrator) handleUtterance(ctx context.Context, wav string) {
 		return
 	}
 	o.setState(StateVoiceThinking)
-	if err := stt.EnsureServer(ctx, o.d.WhisperURL, o.d.WhisperBin, o.d.WhisperModel); err != nil {
-		log.Printf("whisper server: %v", err)
-		return
-	}
-	text, err := stt.Transcribe(ctx, o.d.WhisperURL, wav, o.d.AccentPrompt, "en")
+	text, err := o.transcribe(ctx, wav)
 	if err != nil {
 		log.Printf("voice stt: %v", err)
 		return

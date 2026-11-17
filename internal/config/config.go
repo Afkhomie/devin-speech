@@ -17,6 +17,13 @@ type STT struct {
 	ModelPath    string `toml:"model_path"`
 	ServerBin    string `toml:"server_bin"`
 	AccentPrompt string `toml:"accent_prompt"`
+	// Backend: "auto" (remote -> local fallback), "local", or "remote".
+	Backend string `toml:"backend"`
+	// OpenAI-compatible transcription endpoint config. APIKey falls back
+	// to the OPENAI_API_KEY env var when empty.
+	BaseURL string `toml:"base_url"`
+	Model   string `toml:"model"`
+	APIKey  string `toml:"api_key"`
 }
 
 type TTS struct {
@@ -58,6 +65,10 @@ func Default() *Config {
 			ModelPath:    filepath.Join(home, "tools/models/ggml-tiny.en-q8_0.bin"),
 			ServerBin:    filepath.Join(home, "tools/whisper.cpp/build/bin/whisper-server"),
 			AccentPrompt: "The speaker has a Nepali-English accent.",
+			Backend:      "auto",
+			BaseURL:      "https://api.openai.com/v1",
+			Model:        "whisper-1",
+			APIKey:       os.Getenv("OPENAI_API_KEY"),
 		},
 		TTS: TTS{
 			Bin:    filepath.Join(home, "tools/piper/piper"),
