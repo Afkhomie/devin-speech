@@ -31,6 +31,9 @@ type Update struct {
 
 func New(ctx context.Context, projectDir, permissionMode string) (*Client, error) {
 	cmd := exec.CommandContext(ctx, "devin", "acp")
+	if projectDir != "" {
+		cmd.Dir = projectDir
+	}
 	if permissionMode != "" {
 		cmd.Env = append(cmd.Environ(), "DEVIN_PERMISSION_MODE="+permissionMode)
 	}
@@ -59,6 +62,7 @@ func New(ctx context.Context, projectDir, permissionMode string) (*Client, error
 
 func (c *Client) readLoop(r io.Reader) {
 	defer close(c.done)
+	defer close(c.updates)
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
 	for sc.Scan() {

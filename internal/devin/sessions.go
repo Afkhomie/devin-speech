@@ -18,8 +18,8 @@ type SessionInfo struct {
 	LastActivityAt int64  `json:"last_activity_at"`
 }
 
-// ListSessions returns sessions for dir via `devin list --format json`.
-func ListSessions(ctx context.Context, dir string) ([]SessionInfo, error) {
+// RecentSessions returns all sessions sorted by last_activity_at desc.
+func RecentSessions(ctx context.Context) ([]SessionInfo, error) {
 	out, err := exec.CommandContext(ctx, "devin", "list", "--format", "json").Output()
 	if err != nil {
 		return nil, fmt.Errorf("devin list: %w", err)
@@ -27,6 +27,18 @@ func ListSessions(ctx context.Context, dir string) ([]SessionInfo, error) {
 	var all []SessionInfo
 	if err := json.Unmarshal(out, &all); err != nil {
 		return nil, fmt.Errorf("parse devin list: %w", err)
+	}
+	sort.Slice(all, func(i, j int) bool {
+		return all[i].LastActivityAt > all[j].LastActivityAt
+	})
+	return all, nil
+}
+
+// ListSessions returns sessions for dir via `devin list --format json`.
+func ListSessions(ctx context.Context, dir string) ([]SessionInfo, error) {
+	all, err := RecentSessions(ctx)
+	if err != nil {
+		return nil, err
 	}
 	var res []SessionInfo
 	for _, s := range all {
